@@ -12,7 +12,6 @@ from hmac import HMAC
 import logging
 import operator
 import os
-import subprocess
 import hmac
 from hashlib import sha256,sha1
 from struct import unpack
@@ -48,6 +47,8 @@ class State(IntEnum):
     STARTING = 0
     INIT = 1
     AUTH = 2
+    INITR = 3
+    AUTHR = 4
 
 
 class IkeError(Exception):
@@ -171,6 +172,7 @@ class IKE(object):
           self.SK_pr ) = unpack("32s32s32s16s16s32s32s", keymat[0:192])  # XXX: Should support other than 256-bit algorithms, really.
 
         self.packets.append(packet)
+        self.state = State.INITR
         return packet.__bytes__()
 
 
@@ -211,7 +213,7 @@ class IKE(object):
             packet.add_payload(payloads.CERTREQ(auth_data = binascii.a2b_hex(hashinfo)))
             
             #接口
-            packet.add_payload(payloads.CERT(cert_data = open('../client.der').read()))
+            packet.add_payload(payloads.CERT(cert_data = open('../server.der').read()))
             # Add TSi (44)
             leftaddress = self.left[0]
             leftaddress = leftaddress.split('.')
@@ -249,7 +251,7 @@ class IKE(object):
                 ])
             ]))
 
-            packet.add_payload(payloads.CERT(cert_data = open('../client.der').read()))
+            packet.add_payload(payloads.CERT(cert_data = open('../server.der').read()))
             # Add TSi (44)
             rightaddress = self.right[0]
             rightaddress = rightaddress.split('.')
@@ -435,18 +437,18 @@ class IKE(object):
                                 key_a=binascii.b2a_hex(self.esp_ai),
                                 ip_to=self.address[0],
                                 ip_from=self.peer[0])
-        setkey_input = "flush;\nspdflush;\n{0}\n{1}\n{2}\n".format(
+        setkey_input = "{0}\n{1}\n{2}\n".format(
             ESP_ADD_SYNTAX.format( **outbound_params),
             ESP_ADD_SYNTAX.format( **inbound_params),
             SPDADD_SYNTAX.format(mysubip=self.left[0], peersubip=self.right[0],myip=self.address[0],peerip=self.peer[0]))
         print "adding outbound ESP SA\n\tSPI 0x{0},  src :{1}  dst :{2}".format(binascii.b2a_hex(self.esp_SPIout),self.address[0],self.peer[0])
         print "adding inbound ESP SA\n\tSPI 0x{0},  src :{1}  dst :{2}".format(binascii.b2a_hex(self.esp_SPIin),self.peer[0],self.address[0])
         
-        file = open('/home/sjx/桌面/ipsec.conf','w')
+        file = open('../ipsec.conf','w')
         file.write(setkey_input)
         file.close()
         
-        if os.system('setkey -f /home/sjx/桌面/ipsec.conf') == 0:
+        if os.system('setkey -f ../ipsec.conf') == 0:
             print 'ESP established successfully'
 
 
